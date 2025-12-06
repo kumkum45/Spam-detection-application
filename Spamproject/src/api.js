@@ -29,12 +29,40 @@ export async function predictMessage(message) {
 }
 
 // --- Fetch User Activity ---
+// --- Fetch User Activity ---
+// --- Fetch User Activity ---
 export async function getUserActivity() {
-  const token = localStorage.getItem("access_token"); // Get token from localStorage
-  const userId = localStorage.getItem("user_id",userId);
+  const token = localStorage.getItem("access_token");
+  let userId = localStorage.getItem("user_id");
+
+  console.log("DEBUG getUserActivity: token =", !!token, "userId =", userId);
+
+  if (!token) {
+    throw new Error("Not authenticated. Please login first.");
+  }
+
+  if (!userId || userId === "undefined" || userId === "null") {
+    console.log("DEBUG: userId missing, fetching from token...");
+    try {
+      const userInfo = await getUserFromToken();
+      userId = userInfo.user_id;
+      if (!userId) throw new Error("Failed to determine user id from token");
+      localStorage.setItem("user_id", String(userId));
+      console.log("DEBUG: Got userId from token:", userId);
+    } catch (err) {
+      console.error("Failed to get userId from token:", err);
+      throw err;
+    }
+  }
+
+  userId = parseInt(userId, 10);
+  if (Number.isNaN(userId)) throw new Error("Invalid user_id in localStorage");
 
   try {
-    const response = await fetch(`${API_BASE_URL}/user/activity?user_id=${userId}`, {
+    const url = `${API_BASE_URL}/user/activity?user_id=${userId}`;
+    console.log("DEBUG: Fetching from URL:", url);
+    
+    const response = await fetch(url, {
       method: "GET",
       headers: { 
         "Content-Type": "application/json",
@@ -42,14 +70,19 @@ export async function getUserActivity() {
       },
     });
 
+    console.log("DEBUG: Response status:", response.status);
+
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
+      console.error("DEBUG: Backend error:", data);
       throw new Error(data.detail || `Server error: ${response.status}`);
     }
 
-    return await response.json(); // should return an array of messages for the logged-in user
+    const result = await response.json();
+    console.log("DEBUG: Got data:", result);
+    return result;
   } catch (error) {
-    console.error("API Error:", error);
+    console.error("API Error (getUserActivity):", error);
     throw error;
   }
 }
@@ -95,4 +128,30 @@ export async function getReportStats() {
     throw new Error(data.detail || "Failed to fetch report stats");
   }
   return await response.json();
+}
+
+
+export async function getUserFromToken() {
+  const token = localStorage.getItem("access_token");
+  if (!token) throw new Error("Not authenticated. Please login first.");
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/me`, {
+      method: "GET",
+      headers: { 
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.detail || `Server error: ${response.status}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("API Error:", error);
+    throw error;
+  }
 }

@@ -29,8 +29,10 @@ export default function Login() {
       if (!response.ok) {
         toast.error(data.detail || "Login failed. Check your credentials.");
       } else {
-        // Save token in localStorage
+        // Save token, user_id, and username in localStorage
         localStorage.setItem("access_token", data.access_token);
+        localStorage.setItem("user_id", data.user_id);
+        localStorage.setItem("username", data.username);
         toast.success("Logged in successfully!");
         navigate("/home"); // redirect to home page
       }

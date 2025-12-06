@@ -1,34 +1,87 @@
 import React, { useState, useEffect } from "react";
 import Navbar from "./Navbar";
+import { getUserActivity, getUserFromToken } from "../api";
+import { useNavigate } from "react-router-dom";
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const [data, setData] = useState({
-    total_scans: 120,
-    spam_detected: 45,
-    safe_messages: 75,
-    accuracy: 87,
-    recent_activity: [
-      { message: "Congratulations! You've won a prize", status: "spam", time: "2025-09-13T12:30:00Z" },
-      { message: "Meeting at 3 PM today", status: "safe", time: "2025-09-13T11:15:00Z" },
-      { message: "Your account has been compromised", status: "spam", time: "2025-09-12T18:45:00Z" },
-      { message: "Dinner at 8?", status: "safe", time: "2025-09-12T17:00:00Z" },
-    ],
+    total_scans: 0,
+    spam_detected: 0,
+    safe_messages: 0,
+    accuracy: 0,
+    recent_activity: [],
   });
 
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Simulate loading
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setLoading(false);
-    }, 500); // small delay to simulate loading
-    return () => clearTimeout(timer);
-  }, []);
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem("access_token");
+        let userId = localStorage.getItem("user_id");
+        
+        console.log("DEBUG Dashboard: token =", token);
+        console.log("DEBUG Dashboard: userId =", userId);
+        
+        // If no token, redirect to login
+        if (!token) {
+          navigate("/login");
+          return;
+        }
+
+        // If no userId but we have token, try to extract from token or fetch user info
+        if (!userId || userId === "undefined") {
+          try {
+            console.log("DEBUG: No userId, fetching from token...");
+            const userInfo = await getUserFromToken();
+            userId = userInfo.user_id;
+            localStorage.setItem("user_id", userId.toString());
+            localStorage.setItem("username", userInfo.username);
+            console.log("DEBUG: Got userId from token:", userId);
+          } catch (err) {
+            console.error("Failed to get user info from token:", err);
+            navigate("/login");
+            return;
+          }
+        }
+
+        // Fetch user activity data from backend
+        const response = await getUserActivity();
+        setData(response);
+        setError(null);
+      } catch (err) {
+        console.error("Error fetching dashboard data:", err);
+        setError(err.message || "Failed to load dashboard data");
+        // Redirect to login after 2 seconds
+        setTimeout(() => {
+          navigate("/login");
+        }, 2000);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDashboardData();
+  }, [navigate]);
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <p>Loading dashboard...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-600 mb-4">{error}</p>
+          <p className="text-gray-600 mb-4">Redirecting to login...</p>
+        </div>
       </div>
     );
   }
@@ -54,24 +107,28 @@ export default function Dashboard() {
         {/* Recent Activity */}
         <div className="bg-white rounded-xl shadow-md p-6">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Recent Activity</h2>
-          <div className="space-y-4">
-            {data.recent_activity.map((item, index) => (
-              <div
-                key={index}
-                className="flex items-center justify-between p-4 bg-gray-200 rounded-lg"
-              >
-                <div className="flex items-center space-x-3">
-                  <div
-                    className={`w-3 h-3 rounded-full ${item.status === "spam" ? "bg-red-500" : "bg-green-500"}`}
-                  ></div>
-                  <p className="text-gray-700 break-words">{item.message}</p>
+          {data.recent_activity && data.recent_activity.length > 0 ? (
+            <div className="space-y-4">
+              {data.recent_activity.map((item, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-4 bg-gray-200 rounded-lg"
+                >
+                  <div className="flex items-center space-x-3">
+                    <div
+                      className={`w-3 h-3 rounded-full ${item.status === "spam" || item.status === "phishing" ? "bg-red-500" : "bg-green-500"}`}
+                    ></div>
+                    <p className="text-gray-700 break-words">{item.message}</p>
+                  </div>
+                  <span className="text-sm text-gray-500">
+                    {new Date(item.time).toLocaleString()}
+                  </span>
                 </div>
-                <span className="text-sm text-gray-500">
-                  {new Date(item.time).toLocaleString()}
-                </span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-gray-600">No recent activity. Start scanning messages!</p>
+          )}
         </div>
       </div>
     </div>
